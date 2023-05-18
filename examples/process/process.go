@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	expect "github.com/google/goexpect"
+	expect "github.com/sonnt85/goexpect"
 	"github.com/google/goterm/term"
 )
 

@@ -32,7 +32,7 @@ with the device.
 The VerboseWriter option can be used to change where the verbose session logs are written.
 Using this option will start writing verbose output to the provided io.Writer instead of the log default.
 
-See the [ExampleVerbose](https://github.com/google/goexpect/blob/5c8d637b0287a2ae7bb805554056728c453871e4/expect_test.go#L585) code for an example of how to use this. 
+See the [ExampleVerbose](https://github.com/sonnt85/goexpect/blob/5c8d637b0287a2ae7bb805554056728c453871e4/expect_test.go#L585) code for an example of how to use this. 
 
 ### NoCheck
 
@@ -93,7 +93,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/google/goexpect"
+	"github.com/sonnt85/goexpect"
 	"github.com/google/goterm/term"
 )
 
@@ -140,7 +140,7 @@ In essence to run and attach to a process the `expect.Spawn(<cmd>,<timeout>)` is
 The spawn returns an Expecter `e` that can run `e.Expect` and `e.Send` commands to match information
 in the output and Send information in.
 
-*See the https://github.com/google/goexpect/blob/master/examples/newspawner/telnet.go  example for a slightly more fleshed out version*
+*See the https://github.com/sonnt85/goexpect/blob/master/examples/newspawner/telnet.go  example for a slightly more fleshed out version*
 
 #### FTP
 
@@ -170,7 +170,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/goexpect"
+	"github.com/sonnt85/goexpect"
 	"github.com/google/goterm/term"
 )
 
@@ -218,10 +218,10 @@ Using the expect.Batcher makes the standard Send/Expect interactions more compac
 
 #### SSH
 
-With the SSH login example we test out the [expect.Caser](https://github.com/google/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L388-L397)
-and the [Case Tags](https://github.com/google/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L324-L335).
+With the SSH login example we test out the [expect.Caser](https://github.com/sonnt85/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L388-L397)
+and the [Case Tags](https://github.com/sonnt85/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L324-L335).
 
-Also for this we'll use the Go Expect native [SSH Spawner](https://github.com/google/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L872-L879)
+Also for this we'll use the Go Expect native [SSH Spawner](https://github.com/sonnt85/goexpect/blob/7f68e6ee0bc89860ff53a5c0d50bcfae61853506/expect.go#L872-L879)
 instead of spawning a process.
 
 
@@ -256,7 +256,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 
-	"github.com/google/goexpect"
+	"github.com/sonnt85/goexpect"
 	"github.com/google/goterm/term"
 )
 
@@ -313,7 +313,7 @@ function.
 
 *telnet spawner*
 
-From the [newspawner](https://github.com/google/goexpect/blob/master/examples/newspawner/telnet.go) example.
+From the [newspawner](https://github.com/sonnt85/goexpect/blob/master/examples/newspawner/telnet.go) example.
 
 ```
 func telnetSpawn(addr string, timeout time.Duration, opts ...expect.Option) (expect.Expecter, <-chan error, error) {
