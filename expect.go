@@ -3,14 +3,14 @@
 // license that can be found in the LICENSE file.
 
 // Package expect is a Go version of the classic TCL Expect.
-package expect
+package goexpect
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -20,19 +20,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/goterm/term"
+	log "github.com/sonnt85/gosutils/slogrus"
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/google/goterm/term"
 )
 
 // DefaultTimeout is the default Expect timeout.
 const DefaultTimeout = 60 * time.Second
 
 const (
-	checkDuration     = 2 * time.Second // checkDuration how often to check for new output.
-	defaultBufferSize = 8192            // defaultBufferSize is the default io buffer size.
+	checkDuration        = 2 * time.Second // checkDuration how often to check for new output.
+	defaultOptBufferSize = 8192            // defaultOptBufferSize is the default io buffer size.
 )
 
 // Status contains an errormessage and a status code.
@@ -48,7 +48,7 @@ func NewStatus(code codes.Code, msg string) *Status {
 
 // NewStatusf returns a Status with the provided code and a formatted message.
 func NewStatusf(code codes.Code, format string, a ...interface{}) *Status {
-	return NewStatus(code, fmt.Sprintf(fmt.Sprintf(format, a...)))
+	return NewStatus(code, fmt.Sprintf(format, a...))
 }
 
 // Err is a helper to handle errors.
@@ -64,67 +64,71 @@ func (s *Status) Error() string {
 	return s.msg
 }
 
-// Option represents one Expecter option.
+/*Option represents one Expecter option.*/
 type Option func(*GExpect) Option
 
-// CheckDuration changes the default duration checking for new incoming data.
-func CheckDuration(d time.Duration) Option {
+// OptCheckDuration changes the default duration checking for new incoming data.
+func OptCheckDuration(d time.Duration) Option {
 	return func(e *GExpect) Option {
 		prev := e.chkDuration
 		e.chkDuration = d
-		return CheckDuration(prev)
+		return OptCheckDuration(prev)
 	}
 }
 
-// SendTimeout set timeout for Send commands
-func SendTimeout(timeout time.Duration) Option {
+/* OptSendTimeout set timeout for Send commands */
+func OptSendTimeout(timeout time.Duration) Option {
 	return func(e *GExpect) Option {
 		prev := e.sendTimeout
 		e.sendTimeout = timeout
-		return SendTimeout(prev)
+		return OptSendTimeout(prev)
 	}
 }
 
-// Verbose enables/disables verbose logging of matches and sends.
-func Verbose(v bool) Option {
+/* OptVerbose enables/disables verbose logging of matches and sends.*/
+func OptVerbose(v bool) Option {
 	return func(e *GExpect) Option {
 		prev := e.verbose
 		e.verbose = v
-		return Verbose(prev)
+		return OptVerbose(prev)
 	}
 }
 
-// VerboseWriter sets an alternate destination for verbose logs.
-func VerboseWriter(w io.Writer) Option {
+/* OptVerboseWriter sets an alternate destination for verbose logs.*/
+func OptVerboseWriter(w io.Writer) Option {
 	return func(e *GExpect) Option {
 		prev := e.verboseWriter
 		e.verboseWriter = w
-		return VerboseWriter(prev)
+		return OptVerboseWriter(prev)
 	}
 }
 
-// Tee duplicates all of the spawned process's output to the given writer and
-// closes the writer when complete. Writes occur from another thread, so
-// synchronization may be necessary.
-func Tee(w io.WriteCloser) Option {
+/*
+OptTee duplicates all of the spawned process's output to the given writer and
+closes the writer when complete. Writes occur from another thread, so
+synchronization may be necessary.
+*/
+func OptTee(w io.WriteCloser) Option {
 	return func(e *GExpect) Option {
 		prev := e.teeWriter
 		e.teeWriter = w
-		return Tee(prev)
+		return OptTee(prev)
 	}
 }
 
-// NoCheck turns off the Expect alive checks.
-func NoCheck() Option {
+/* OptNoCheck turns off the Expect alive checks.*/
+func OptNoCheck() Option {
 	return changeChk(func(*GExpect) bool {
 		return true
 	})
 }
 
-// DebugCheck adds logging to the check function.
-// The check function for the spawners are called at creation/timeouts and I/O so can
-// be usable for printing current state during debugging.
-func DebugCheck(l *log.Logger) Option {
+/*
+OptDebugCheck adds logging to the check function.
+The check function for the spawners are called at creation/timeouts and I/O so can
+be usable for printing current state during debugging.
+*/
+func OptDebugCheck(l log.Logger) Option {
 	lg := log.Printf
 	if l != nil {
 		lg = l.Printf
@@ -144,8 +148,8 @@ func DebugCheck(l *log.Logger) Option {
 	}
 }
 
-// ChangeCheck changes the Expect check function.
-func ChangeCheck(f func() bool) Option {
+/* OptChangeCheck changes the Expect check function.*/
+func OptChangeCheck(f func() bool) Option {
 	return changeChk(func(*GExpect) bool {
 		return f()
 	})
@@ -161,42 +165,44 @@ func changeChk(f func(*GExpect) bool) Option {
 	}
 }
 
-// SetEnv sets the environmental variables of the spawned process.
-func SetEnv(env []string) Option {
+/* OptSetEnv sets the environmental variables of the spawned process. */
+func OptSetEnv(env []string) Option {
 	return func(e *GExpect) Option {
 		prev := e.cmd.Env
 		e.cmd.Env = env
-		return SetEnv(prev)
+		return OptSetEnv(prev)
 	}
 }
 
-// SetSysProcAttr sets the SysProcAttr syscall values for the spawned process.
-// Because this modifies cmd, it will only work with the process spawners
-// and not effect the GExpect option method.
-func SetSysProcAttr(args *syscall.SysProcAttr) Option {
+/*
+OptSetSysProcAttr sets the SysProcAttr syscall values for the spawned process.
+Because this modifies cmd, it will only work with the process spawners
+and not effect the GExpect option method.
+*/
+func OptSetSysProcAttr(args *syscall.SysProcAttr) Option {
 	return func(e *GExpect) Option {
 		prev := e.cmd.SysProcAttr
 		e.cmd.SysProcAttr = args
-		return SetSysProcAttr(prev)
+		return OptSetSysProcAttr(prev)
 	}
 }
 
-// PartialMatch enables/disables the returning of unmatched buffer so that consecutive expect call works.
-func PartialMatch(v bool) Option {
+/* OptPartialMatch enables/disables the returning of unmatched buffer so that consecutive expect call works.*/
+func OptPartialMatch(v bool) Option {
 	return func(e *GExpect) Option {
 		prev := e.partialMatch
 		e.partialMatch = v
-		return PartialMatch(prev)
+		return OptPartialMatch(prev)
 	}
 }
 
-// BufferSize sets the size of receive buffer in bytes.
-func BufferSize(bufferSize int) Option {
+/* OptBufferSize sets the size of receive buffer in bytes. */
+func OptBufferSize(bufferSize int) Option {
 	return func(e *GExpect) Option {
 		e.bufferSizeIsSet = true
 		prev := e.bufferSize
 		e.bufferSize = bufferSize
-		return BufferSize(prev)
+		return OptBufferSize(prev)
 	}
 }
 
@@ -233,19 +239,19 @@ type BatchRes struct {
 // Batcher interface is used to make it more straightforward and readable to create
 // batches of Expects.
 //
-// var batch = []Batcher{
-//	&BExpT{"password",8},
-//	&BSnd{"password\n"},
-//	&BExp{"olakar@router>"},
-//	&BSnd{ "show interface description\n"},
-//	&BExp{ "olakar@router>"},
-// }
+//	var batch = []Batcher{
+//		&BExpT{"password",8},
+//		&BSnd{"password\n"},
+//		&BExp{"olakar@router>"},
+//		&BSnd{ "show interface description\n"},
+//		&BExp{ "olakar@router>"},
+//	}
 //
-// var batchSwCaseReplace = []Batcher{
-//	&BCasT{[]Caser{
-//		&BCase{`([0-9]) -- .*\(MASTER\)`, `\1` + "\n"}}, 1},
-//	&BExp{`prompt/>`},
-// }
+//	var batchSwCaseReplace = []Batcher{
+//		&BCasT{[]Caser{
+//			&BCase{`([0-9]) -- .*\(MASTER\)`, `\1` + "\n"}}, 1},
+//		&BExp{`prompt/>`},
+//	}
 type Batcher interface {
 	// cmd returns the Batch command.
 	Cmd() int
@@ -608,7 +614,7 @@ type GExpect struct {
 	verboseWriter io.Writer
 	// teeWriter receives a duplicate of the spawned process's output when set.
 	teeWriter io.WriteCloser
-	// PartialMatch enables the returning of unmatched buffer so that consecutive expect call works.
+	// OptPartialMatch enables the returning of unmatched buffer so that consecutive expect call works.
 	partialMatch bool
 	// bufferSize is the size of the io buffers in bytes.
 	bufferSize int
@@ -631,7 +637,7 @@ func (e *GExpect) String() string {
 	case e.cmd != nil:
 		res += fmt.Sprintf("cmd: %s(%d) ", e.cmd.Path, e.cmd.Process.Pid)
 	case e.ssh != nil:
-		res += fmt.Sprint("ssh session ")
+		res += "ssh session "
 	}
 	res += fmt.Sprintf("buf: %q", e.out.String())
 	return res
@@ -704,9 +710,10 @@ func (e *GExpect) SendSignal(sig os.Signal) error {
 // ExpectSwitchCase checks each Case against the accumulated out buffer, sending specified
 // string back. Leaving Send empty will Send nothing to the process.
 // Substring expansion can be used eg.
-// 	Case{`vf[0-9]{2}.[a-z]{3}[0-9]{2}\.net).*UP`,`show arp \1`}
-// 	Given: vf11.hnd01.net            UP      35 (4)        34 (4)          CONNECTED         0              0/0
-// 	Would send: show arp vf11.hnd01.net
+//
+//	Case{`vf[0-9]{2}.[a-z]{3}[0-9]{2}\.net).*UP`,`show arp \1`}
+//	Given: vf11.hnd01.net            UP      35 (4)        34 (4)          CONNECTED         0              0/0
+//	Would send: show arp vf11.hnd01.net
 func (e *GExpect) ExpectSwitchCase(cs []Caser, timeout time.Duration) (string, []string, int, error) {
 	// Compile all regexps
 	rs := make([]*regexp.Regexp, 0, len(cs))
@@ -776,7 +783,7 @@ func (e *GExpect) ExpectSwitchCase(cs []Caser, timeout time.Duration) (string, [
 					for n, bytesRead, err := 0, 0, error(nil); bytesRead < len(vStr); bytesRead += n {
 						n, err = e.verboseWriter.Write([]byte(vStr)[n:])
 						if err != nil {
-							log.Printf("Write to Verbose Writer failed: %v", err)
+							log.Printf("Write to OptVerbose Writer failed: %v", err)
 							break
 						}
 					}
@@ -804,7 +811,7 @@ func (e *GExpect) ExpectSwitchCase(cs []Caser, timeout time.Duration) (string, [
 					// \(submatch) will be expanded in the Send string.
 					// To escape use \\(number).
 					si := strconv.Itoa(i)
-					r := strings.NewReplacer(`\\`+si, `\`+si, `\`+si, `\\`+si)
+					r := strings.NewReplacer(`\\`+si, "\\"+si, "\\"+si, `\\`+si)
 					st = r.Replace(st)
 					st = strings.Replace(st, `\\`+si, match[i], -1)
 				}
@@ -891,17 +898,17 @@ type GenOptions struct {
 func SpawnGeneric(opt *GenOptions, timeout time.Duration, opts ...Option) (*GExpect, <-chan error, error) {
 	switch {
 	case opt == nil:
-		return nil, nil, errors.New("GenOptions is <nil>")
+		return nil, nil, errors.New("genOptions is <nil>")
 	case opt.In == nil:
-		return nil, nil, errors.New("In can't be <nil>")
+		return nil, nil, errors.New("in can't be <nil>")
 	case opt.Out == nil:
-		return nil, nil, errors.New("Out can't be <nil>")
+		return nil, nil, errors.New("out can't be <nil>")
 	case opt.Wait == nil:
-		return nil, nil, errors.New("Wait can't be <nil>")
+		return nil, nil, errors.New("wait can't be <nil>")
 	case opt.Close == nil:
-		return nil, nil, errors.New("Close can't be <nil>")
+		return nil, nil, errors.New("close can't be <nil>")
 	case opt.Check == nil:
-		return nil, nil, errors.New("Check can't be <nil>")
+		return nil, nil, errors.New("check can't be <nil>")
 	}
 	if timeout < 1 {
 		timeout = DefaultTimeout
@@ -923,9 +930,9 @@ func SpawnGeneric(opt *GenOptions, timeout time.Duration, opts ...Option) (*GExp
 		o(e)
 	}
 
-	// Set the buffer size to the default if expect.BufferSize(...) is not utilized.
+	// Set the buffer size to the default if expect.OptBufferSize(...) is not utilized.
 	if !e.bufferSizeIsSet {
-		e.bufferSize = defaultBufferSize
+		e.bufferSize = defaultOptBufferSize
 	}
 
 	errCh := make(chan error, 1)
@@ -953,7 +960,7 @@ func SpawnFake(b []Batcher, timeout time.Duration, opt ...Option) (*GExpect, <-c
 	if err != nil {
 		return nil, nil, err
 	}
-	// The Tee option should only affect the output not the batcher
+	// The OptTee option should only affect the output not the batcher
 	srv.teeWriter = nil
 
 	go func() {
@@ -1027,9 +1034,9 @@ func SpawnWithArgs(command []string, timeout time.Duration, opts ...Option) (*GE
 		o(e)
 	}
 
-	// Set the buffer size to the default if expect.BufferSize(...) is not utilized.
+	// Set the buffer size to the default if expect.OptBufferSize(...) is not utilized.
 	if !e.bufferSizeIsSet {
-		e.bufferSize = defaultBufferSize
+		e.bufferSize = defaultOptBufferSize
 	}
 
 	res := make(chan error, 1)
@@ -1052,6 +1059,51 @@ func SpawnSSH(sshClient *ssh.Client, timeout time.Duration, opts ...Option) (*GE
 	tios.Raw()
 	tios.Wz.WsCol, tios.Wz.WsRow = sshTermWidth, sshTermHeight
 	return SpawnSSHPTY(sshClient, timeout, tios, opts...)
+}
+
+func ClientAuthMethod(file string) (ssh.AuthMethod, error) {
+	var buffer []byte
+	if _, err := os.Stat(file); err == nil {
+		buffer, err = os.ReadFile(file) //private key
+		if err != nil {
+			//			logger.Println(fmt.Sprintf("Cannot read SSH public key file %s, use password", file))
+			return nil, err
+		}
+	} else {
+		if len(file) > 50 { //private key
+			buffer = []byte(file)
+		} else { //password
+			return ssh.Password(file), nil
+		}
+	}
+
+	key, err := ssh.ParsePrivateKey(buffer)
+	if err != nil {
+		//		logger.Println(fmt.Sprintf("Cannot parse SSH public key file %s", file))
+		return nil, err
+	}
+	return ssh.PublicKeys(key), nil
+}
+
+// SpawSSHClient starts an interactive SSH session,ties it to a PTY and collects the output. The returned channel sends the
+// state of the SSH session after it finishes.
+func SpawSSHClient(host string, port int, user, pwd string, timeout time.Duration, opts ...Option) (ge *GExpect, ec <-chan error, err error) {
+	var auth ssh.AuthMethod
+	if auth, err = ClientAuthMethod(pwd); err != nil {
+		return
+	}
+
+	var clt *ssh.Client
+	clt, err = ssh.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(int(port))),
+		&ssh.ClientConfig{
+			User:            user,
+			Auth:            []ssh.AuthMethod{auth},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		})
+	if err != nil {
+		return
+	}
+	return SpawnSSH(clt, timeout)
 }
 
 const (
@@ -1097,9 +1149,9 @@ func SpawnSSHPTY(sshClient *ssh.Client, timeout time.Duration, term term.Termios
 		o(e)
 	}
 
-	// Set the buffer size to the default if expect.BufferSize(...) is not utilized.
+	// Set the buffer size to the default if expect.OptBufferSize(...) is not utilized.
 	if !e.bufferSizeIsSet {
-		e.bufferSize = defaultBufferSize
+		e.bufferSize = defaultOptBufferSize
 	}
 
 	if term.Wz.WsCol == 0 {
@@ -1130,6 +1182,26 @@ func SpawnSSHPTY(sshClient *ssh.Client, timeout time.Duration, term term.Termios
 	errCh := make(chan error, 1)
 	go e.waitForSession(errCh, session.Wait, inPipe, outPipe, errPipe)
 	return e, errCh, nil
+}
+
+// SpawnSSHPTY starts an interactive SSH session and ties it to a local PTY, optionally requests a remote PTY.
+func SpawnSSHPTYClient(host string, port int, user, pwd string, timeout time.Duration, term term.Termios, opts ...Option) (ge *GExpect, ec <-chan error, err error) {
+	var auth ssh.AuthMethod
+	if auth, err = ClientAuthMethod(pwd); err != nil {
+		return
+	}
+
+	var clt *ssh.Client
+	clt, err = ssh.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(int(port))),
+		&ssh.ClientConfig{
+			User:            user,
+			Auth:            []ssh.AuthMethod{auth},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		})
+	if err != nil {
+		return
+	}
+	return SpawnSSHPTY(clt, timeout, term, opts...)
 }
 
 func (e *GExpect) waitForSession(r chan error, wait func() error, sIn io.WriteCloser, sOut io.Reader, sErr io.Reader) {
@@ -1171,7 +1243,7 @@ func (e *GExpect) waitForSession(r chan error, wait func() error, sIn io.WriteCl
 				}
 				return
 			}
-			// Tee output to writer
+			// OptTee output to writer
 			if e.teeWriter != nil {
 				e.teeWriter.Write(buf[:nr])
 			}
@@ -1239,7 +1311,7 @@ func (e *GExpect) Send(in string) error {
 			vStr := fmt.Sprintln(term.Blue("Sent:").String() + fmt.Sprintf(" %q", in))
 			_, err := e.verboseWriter.Write([]byte(vStr))
 			if err != nil {
-				log.Printf("Write to Verbose Writer failed: %v", err)
+				log.Printf("Write to OptVerbose Writer failed: %v", err)
 			}
 		} else {
 			log.Printf("Sent: %q", in)
@@ -1317,7 +1389,7 @@ func (e *GExpect) read(done chan struct{}, ptySync *sync.WaitGroup) {
 			}
 			return
 		}
-		// Tee output to writer
+		// OptTee output to writer
 		if e.teeWriter != nil {
 			e.teeWriter.Write(buf[:nr])
 		}
