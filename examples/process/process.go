@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	expect "github.com/sonnt85/goexpect"
 	"github.com/google/goterm/term"
+	expect "github.com/sonnt85/goexpect"
 )
 
 const (

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package expect
+package goexpect
 
 import (
 	"bufio"
@@ -21,8 +21,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	stdlog "log"
 
 	"google.golang.org/grpc/codes"
 
@@ -498,7 +496,7 @@ func ExampleDebugCheck() {
 	fmt.Println("First round")
 	interact()
 	fmt.Println("Second round - Debugging enabled")
-	prev := exp.Options(DebugCheck(stdlog.New(wLog, "DebugExample ", 0)))
+	prev := exp.Options(DebugCheck(nil))
 	interact()
 	exp.Options(prev)
 	fmt.Println("Last round - Previous Check put back")
@@ -1345,8 +1343,8 @@ func ExampleGExpect_SendSignal() {
 	// Output: Got the USR1 Signal
 }
 
-// ExampleGExpect_SendSignal_Batch is an example of using SendSignal in a batch.
-func ExampleGExpect_SendSignal_Batch() {
+// ExampleGExpect_SendSignal_batch is an example of using SendSignal in a batch.
+func ExampleGExpect_SendSignal_batch() {
 	exp, r, err := Spawn("testdata/traptest.sh", 30*time.Second)
 	if err != nil {
 		fmt.Printf("Spawn failed: %v\n", err)

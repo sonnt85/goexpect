@@ -1085,9 +1085,9 @@ func ClientAuthMethod(file string) (ssh.AuthMethod, error) {
 	return ssh.PublicKeys(key), nil
 }
 
-// SpawSSHClient starts an interactive SSH session,ties it to a PTY and collects the output. The returned channel sends the
+// SpawnSSHClient starts an interactive SSH session, ties it to a PTY and collects the output. The returned channel sends the
 // state of the SSH session after it finishes.
-func SpawSSHClient(host string, port int, user, pwd string, timeout time.Duration, opts ...Option) (ge *GExpect, ec <-chan error, err error) {
+func SpawnSSHClient(host string, port int, user, pwd string, timeout time.Duration, opts ...Option) (ge *GExpect, ec <-chan error, err error) {
 	var auth ssh.AuthMethod
 	if auth, err = ClientAuthMethod(pwd); err != nil {
 		return
@@ -1104,6 +1104,11 @@ func SpawSSHClient(host string, port int, user, pwd string, timeout time.Duratio
 		return
 	}
 	return SpawnSSH(clt, timeout)
+}
+
+// Deprecated: Use SpawnSSHClient instead.
+func SpawSSHClient(host string, port int, user, pwd string, timeout time.Duration, opts ...Option) (*GExpect, <-chan error, error) {
+	return SpawnSSHClient(host, port, user, pwd, timeout, opts...)
 }
 
 const (
@@ -1421,4 +1426,54 @@ func (e *GExpect) send(done chan struct{}, ptySync *sync.WaitGroup) {
 			}
 		}
 	}
+}
+
+// Deprecated: Use OptCheckDuration instead.
+func CheckDuration(d time.Duration) Option {
+	return OptCheckDuration(d)
+}
+
+// Deprecated: Use OptVerbose instead.
+func Verbose(v bool) Option {
+	return OptVerbose(v)
+}
+
+// Deprecated: Use OptTee instead.
+func Tee(w io.WriteCloser) Option {
+	return OptTee(w)
+}
+
+// Deprecated: Use OptDebugCheck instead.
+func DebugCheck(l log.Logger) Option {
+	return OptDebugCheck(l)
+}
+
+// Deprecated: Use OptChangeCheck instead.
+func ChangeCheck(f func() bool) Option {
+	return OptChangeCheck(f)
+}
+
+// Deprecated: Use OptVerboseWriter instead.
+func VerboseWriter(w io.Writer) Option {
+	return OptVerboseWriter(w)
+}
+
+// Deprecated: Use OptSendTimeout instead.
+func SendTimeout(timeout time.Duration) Option {
+	return OptSendTimeout(timeout)
+}
+
+// Deprecated: Use OptNoCheck instead.
+func NoCheck() Option {
+	return OptNoCheck()
+}
+
+// Deprecated: Use OptPartialMatch instead.
+func PartialMatch(v bool) Option {
+	return OptPartialMatch(v)
+}
+
+// Deprecated: Use OptBufferSize instead.
+func BufferSize(bufferSize int) Option {
+	return OptBufferSize(bufferSize)
 }
