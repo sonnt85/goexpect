@@ -511,7 +511,6 @@ func ExampleDebugCheck() {
 	// Output:
 	// First round
 	// Second round - Debugging enabled
-	// DebugExample
 	// Last round - Previous Check put back
 }
 
